@@ -1,2 +1,2 @@
-# devops_007d_ols
-Repositorio para Devops
+# Evaluación DevOps
+Proyecto base para demostrar el flujo de trabajo.
