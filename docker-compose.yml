@@ -1,0 +1,25 @@
+services:
+  artelab-api:
+    build:
+      context: ./ArteLab      # carpeta donde está el Dockerfile y el pom.xml real
+      dockerfile: Dockerfile
+    container_name: artelab-api
+    ports:
+      - "8080:8080"            # host:contenedor -> http://localhost:8080
+    environment:
+      # Spring Boot mapea automáticamente estas variables de entorno
+      # a las propiedades equivalentes en application.properties
+      # (MAYUSCULAS, puntos y guiones se reemplazan por "_")
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/data/artelab.db
+      USUARIOS_SERVICE_BASE_URL: ${USUARIOS_SERVICE_URL:-http://usuarios-service:8081}
+      SECURITY_JWT_SECRET: ${JWT_SECRET:-artelab-main-secret-change-me-in-production}
+      SECURITY_AUTH_USERNAME: ${ADMIN_USER:-admin}
+      SECURITY_AUTH_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+    volumes:
+      # Volumen nombrado: el archivo artelab.db (SQLite) sobrevive
+      # aunque borremos y recreemos el contenedor
+      - artelab-data:/data
+    restart: unless-stopped
+
+volumes:
+  artelab-data:

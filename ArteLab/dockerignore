@@ -1,0 +1,18 @@
+# No enviamos estas carpetas/archivos al "contexto" de build de Docker.
+# Esto acelera el build y evita que se filtren archivos locales/sensibles.
+
+target/
+*.db
+*.db-journal
+
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+HELP.md
+*.log
