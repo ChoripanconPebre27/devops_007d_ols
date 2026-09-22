@@ -94,13 +94,12 @@ Esto asegura que `artelab-api` no arranque hasta que `usuarios-api` responda "he
 Requisitos: Docker y Docker Compose instalados (`docker --version`, `docker compose version`).
 
 ```bash
-# 1. Ubicarte en la raíz del repo (donde está docker-compose.yml)
-cd ArteLab-SPA-3
-
-# 2. Copiar y completar el archivo de variables de entorno (si no existe aún)
+# 1. Copiar y completar el archivo de variables de entorno (si no existe aún)
 cp .env.example .env
 
-# 3. Construir las imágenes y levantar ambos contenedores
+# 2. Construir las imágenes y levantar ambos contenedores
+sudo usermod -aG docker $USER
+newgrp docker
 docker compose up --build
 ```
 
