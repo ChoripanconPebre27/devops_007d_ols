@@ -1,0 +1,66 @@
+services:
+
+  # ---------------------------------------------------------
+  # Microservicio de usuarios (puerto 8081)
+  # No depende de nadie, así que arranca primero.
+  # ---------------------------------------------------------
+  usuarios-api:
+    build:
+      context: ./usuarios
+      dockerfile: Dockerfile
+    container_name: usuarios-api
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/data/usuarios.db
+      SECURITY_JWT_SECRET: ${USUARIOS_JWT_SECRET:-usuarios-main-secret-change-me-in-production}
+    volumes:
+      - usuarios-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------
+  # Microservicio principal ArteLab (puerto 8080)
+  # Llama a usuarios-api por HTTP, así que necesitamos que
+  # ese servicio ya esté "sano" (no solo "iniciado") antes
+  # de levantar este.
+  # ---------------------------------------------------------
+  artelab-api:
+    build:
+      context: ./artelab
+      dockerfile: Dockerfile
+    container_name: artelab-api
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/data/artelab.db
+      # "usuarios-api" es el nombre del servicio de arriba: Docker Compose
+      # resuelve ese nombre a la IP interna del contenedor automáticamente.
+      USUARIOS_SERVICE_BASE_URL: http://usuarios-api:8081
+      SECURITY_JWT_SECRET: ${ARTELAB_JWT_SECRET:-artelab-main-secret-change-me-in-production}
+      SECURITY_AUTH_USERNAME: ${ADMIN_USER:-admin}
+      SECURITY_AUTH_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+    volumes:
+      - artelab-data:/data
+    depends_on:
+      usuarios-api:
+        # "service_started" solo espera a que el contenedor arranque.
+        # "service_healthy" espera a que el HEALTHCHECK de usuarios-api
+        # devuelva "healthy" -> ese es el orden de arranque real que pediste.
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  artelab-data:
+  usuarios-data:

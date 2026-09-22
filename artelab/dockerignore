@@ -1,0 +1,15 @@
+target/
+*.db
+*.db-journal
+
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+HELP.md
+*.log
