@@ -12,6 +12,7 @@ services:
     ports:
       - "8081:8081"
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       SPRING_DATASOURCE_URL: jdbc:sqlite:/data/usuarios.db
       SECURITY_JWT_SECRET: ${USUARIOS_JWT_SECRET:-usuarios-main-secret-change-me-in-production}
     volumes:
