@@ -92,7 +92,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}      
       - name: Normalizar nombre de imagen
         run: |
-          echo: "NAMESPACE_LC=${NAMESPACE,,}" >> $GITHUB_ENV
+          echo: "NAMESPACE_LC=${NAMESPACE,,}" >> ${GITHUB_ENV}
         env:
           NAMESPACE: ${{ github.repository_owner }}
       - name: Build and Push Usuarios
