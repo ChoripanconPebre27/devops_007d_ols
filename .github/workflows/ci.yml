@@ -90,11 +90,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}      
-      - name: Normalizar nombre de imagen
+
+      - name: Normalizar nombre de imagen a minusculas
         run: |
-          echo: "NAMESPACE_LC=${NAMESPACE,,}" >> $GITHUB_ENV
+          echo "NAMESPACE_LC=${NAMESPACE,,}" >> $GITHUB_ENV
         env:
           NAMESPACE: ${{ github.repository_owner }}
+
       - name: Build and Push Usuarios
         uses: docker/build-push-action@v7
         with:
@@ -109,4 +111,4 @@ jobs:
           context: ./artelab
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/usuarios:latest
+          tags: ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/artelab:latest
