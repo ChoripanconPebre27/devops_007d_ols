@@ -26,6 +26,15 @@ jobs:
 
       - name: Dar permiso de ejecucion al wrapper de Maven
         run: chmod +x mvnw
+      
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/maven@master
+        with:
+          command: test
+          args: --file=usuarios/pom.xml
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
 
       - name: Ejecutar pruebas unitarias
         run: ./mvnw -B clean test
@@ -56,6 +65,15 @@ jobs:
 
       - name: Dar permiso de ejecucion al wrapper de Maven
         run: chmod +x mvnw
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/maven@master
+        with:
+          command: test
+          args: --file=artelab/pom.xml
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
 
       - name: Ejecutar pruebas unitarias
         run: ./mvnw -B clean test
