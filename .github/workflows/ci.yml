@@ -36,6 +36,14 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
+      - name: Run Snyk monitor to take and send snapshot
+        uses: snyk/actions/maven@master
+        with:
+          command: monitor
+          args: --file=usuarios/pom.xml
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
       - name: Ejecutar pruebas unitarias
         run: ./mvnw -B clean test
 
@@ -74,6 +82,14 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
+      
+      - name: Run Snyk monitor to take and send snapshot
+        uses: snyk/actions/maven@master
+        with:
+          command: monitor
+          args: --file=artelab/pom.xml
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
       - name: Ejecutar pruebas unitarias
         run: ./mvnw -B clean test
