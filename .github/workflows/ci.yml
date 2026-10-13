@@ -16,17 +16,6 @@ jobs:
       - name: Copiar repositorio
         uses: actions/checkout@v5
 
-      - name: Configurar Java
-        uses: actions/setup-java@v6
-        with:
-          java-version: "25"
-          distribution: "temurin"
-          cache: maven
-          cache-dependency-path: usuarios/pom.xml
-
-      - name: Dar permiso de ejecucion al wrapper de Maven
-        run: chmod +x mvnw
-      
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/maven@master
         with:
@@ -43,6 +32,17 @@ jobs:
           args: --file=usuarios/pom.xml
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Configurar Java
+        uses: actions/setup-java@v6
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: maven
+          cache-dependency-path: usuarios/pom.xml
+
+      - name: Dar permiso de ejecucion al wrapper de Maven
+        run: chmod +x mvnw
 
       - name: Ejecutar pruebas unitarias
         run: ./mvnw -B clean test
@@ -63,17 +63,6 @@ jobs:
       - name: Copiar repositorio
         uses: actions/checkout@v5
 
-      - name: Configurar Java
-        uses: actions/setup-java@v6
-        with:
-          java-version: "25"
-          distribution: "temurin"
-          cache: maven
-          cache-dependency-path: artelab/pom.xml
-
-      - name: Dar permiso de ejecucion al wrapper de Maven
-        run: chmod +x mvnw
-
       - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/maven@master
         with:
@@ -90,6 +79,17 @@ jobs:
           args: --file=artelab/pom.xml
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      - name: Configurar Java
+        uses: actions/setup-java@v6
+        with:
+          java-version: "25"
+          distribution: "temurin"
+          cache: maven
+          cache-dependency-path: artelab/pom.xml
+
+      - name: Dar permiso de ejecucion al wrapper de Maven
+        run: chmod +x mvnw
 
       - name: Ejecutar pruebas unitarias
         run: ./mvnw -B clean test
