@@ -34,11 +34,11 @@ jobs:
 
       - name: Run SonarCloud Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} # Token de SonarCloud desde Secrets
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           ./mvnw -B sonar:sonar \
-            -Dsonar.projectKey=TU_ORGANIZACION_usuarios \
-            -Dsonar.organization=TU_ORGANIZACION \
+            -Dsonar.projectKey=devops-grupo7_sonar-usuarios \
+            -Dsonar.organization=devops-grupo7 \
             -Dsonar.host.url=https://sonarcloud.io
 
       - name: Run Snyk to check for vulnerabilities
@@ -102,8 +102,8 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           ./mvnw -B sonar:sonar \
-            -Dsonar.projectKey=TU_ORGANIZACION_artelab \
-            -Dsonar.organization=TU_ORGANIZACION \
+            -Dsonar.projectKey=devops-grupo7_sonar-artelab \
+            -Dsonar.organization=devops-grupo7 \
             -Dsonar.host.url=https://sonarcloud.io
 
       - name: Run Snyk to check for vulnerabilities
