@@ -34,9 +34,9 @@ jobs:
 
       - name: Run SonarCloud Analysis
         env:
-          SONAR_TOKEN_U: ${{ secrets.SONAR_TOKEN_U }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_U }}
         run: |
-          ./mvnw -B sonar:sonar \
+          ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey=devops-grupo7_sonar-usuarios \
             -Dsonar.organization=devops-grupo7 \
             -Dsonar.host.url=https://sonarcloud.io
@@ -99,9 +99,9 @@ jobs:
 
       - name: Run SonarCloud Analysis
         env:
-          SONAR_TOKEN_A: ${{ secrets.SONAR_TOKEN_A }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_A }}
         run: |
-          ./mvnw -B sonar:sonar \
+          ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey=devops-grupo7_sonar-artelab \
             -Dsonar.organization=devops-grupo7 \
             -Dsonar.host.url=https://sonarcloud.io
