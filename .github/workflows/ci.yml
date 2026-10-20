@@ -34,7 +34,7 @@ jobs:
 
       - name: Run SonarCloud Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN_U: ${{ secrets.SONAR_TOKEN_U }}
         run: |
           ./mvnw -B sonar:sonar \
             -Dsonar.projectKey=devops-grupo7_sonar-usuarios \
@@ -99,7 +99,7 @@ jobs:
 
       - name: Run SonarCloud Analysis
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN_A: ${{ secrets.SONAR_TOKEN_A }}
         run: |
           ./mvnw -B sonar:sonar \
             -Dsonar.projectKey=devops-grupo7_sonar-artelab \
