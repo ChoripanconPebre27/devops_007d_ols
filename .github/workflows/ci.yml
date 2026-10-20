@@ -50,6 +50,7 @@ jobs:
         run: ./mvnw -B clean verify
 
       - name: Run SonarCloud Analysis
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_U }}
         run: |
@@ -115,6 +116,7 @@ jobs:
         run: ./mvnw -B clean verify
 
       - name: Run SonarCloud Analysis
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main') }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_A }}
         run: |
