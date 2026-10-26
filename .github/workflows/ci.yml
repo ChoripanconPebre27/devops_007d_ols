@@ -22,12 +22,12 @@ jobs:
         uses: snyk/actions/maven@master
         with:
           command: test
-          args: --file=usuarios/pom.xml
+          args: --file=usuarios/pom.xml --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
 
       - name: Run Snyk monitor to take and send snapshot
+        if: ${{ !cancelled() }}
         uses: snyk/actions/maven@master
         with:
           command: monitor
@@ -57,7 +57,8 @@ jobs:
           ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey=devops-grupo7_sonar-usuarios \
             -Dsonar.organization=devops-grupo7 \
-            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.qualitygate.wait=true
 
       - name: Publicar resultados de las pruebas
         if: always()
@@ -88,12 +89,12 @@ jobs:
         uses: snyk/actions/maven@master
         with:
           command: test
-          args: --file=artelab/pom.xml
+          args: --file=artelab/pom.xml --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
 
       - name: Run Snyk monitor to take and send snapshot
+        if: ${{ !cancelled() }}
         uses: snyk/actions/maven@master
         with:
           command: monitor
@@ -123,7 +124,8 @@ jobs:
           ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
             -Dsonar.projectKey=devops-grupo7_sonar-artelab \
             -Dsonar.organization=devops-grupo7 \
-            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.qualitygate.wait=true
 
       - name: Publicar resultados de las pruebas
         if: always()
@@ -138,6 +140,7 @@ jobs:
         with:
           name: artelab-jacoco-report
           path: artelab/target/site/jacoco/
+
   build-docker:
     name: Build and Push Docker Images
     needs: [test-usuarios, test-artelab]
@@ -174,7 +177,9 @@ jobs:
           context: ./usuarios
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/usuarios:latest
+          tags: |
+            ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/usuarios:latest
+            ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/usuarios:${{ github.sha }}
  
       - name: Build and Push Artelab
         uses: docker/build-push-action@v7
@@ -182,4 +187,56 @@ jobs:
           context: ./artelab
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/artelab:latest
+          tags: |
+            ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/artelab:latest
+            ghcr.io/${{ env.NAMESPACE_LC }}/devops_007d_ols/artelab:${{ github.sha }}
+  
+  deploy:
+    name: Deploy to simulated environment
+    needs: build-docker
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    env:
+      COMPOSE_FILE: docker-compose.deploy.yml
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - name: Clonar codigo
+        uses: actions/checkout@v5
+ 
+      - name: Normalizar nombre de imagen a minusculas
+        run: echo "NAMESPACE_LC=${NAMESPACE,,}" >> $GITHUB_ENV
+        env:
+          NAMESPACE: ${{ github.repository_owner }}
+ 
+      - name: Login to Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+ 
+      - name: Descargar las imagenes publicadas
+        run: docker compose pull
+ 
+      - name: Desplegar y esperar a que los servicios esten healthy
+        run: docker compose up -d --wait
+ 
+      - name: Estado de los contenedores
+        run: docker compose ps
+ 
+      - name: Smoke test (health de ambos servicios)
+        run: |
+          curl -fsS http://localhost:8081/actuator/health | grep -q '"status":"UP"'
+          curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'
+ 
+      - name: Mostrar logs si el despliegue falla
+        if: failure()
+        run: docker compose logs --no-color
+ 
+      - name: Destruir el entorno simulado
+        if: always()
+        run: docker compose down -v
