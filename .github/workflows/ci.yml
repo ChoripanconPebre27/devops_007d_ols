@@ -25,6 +25,13 @@ jobs:
           args: --file=usuarios/pom.xml --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
+
+      - name: Alerta de seguridad si Snyk encontro vulnerabilidades
+        if: steps.snyk-test.outcome == 'failure'
+        run: |
+          echo: "::warning title=Snyk (usuarios)::Se encontraron vulnerabilidades de severidad alta o critica. Reviso el paso Run Snyk to check for vulnerabilities."
+          echo: "### Alerta de seguridad (usuarios): Snyk encontro vulnerabilidades altas o criticas" >> $GITHUB_STEP_SUMMARY
 
       - name: Run Snyk monitor to take and send snapshot
         if: ${{ !cancelled() }}
@@ -92,6 +99,13 @@ jobs:
           args: --file=artelab/pom.xml --severity-threshold=high
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
+      
+      - name: Alerta de seguridad si Snyk encontro vulnerabilidades
+        if: steps.snyk-test.outcome == 'failure'
+        run: |
+          echo: "::warning title=Snyk (artelab)::Se encontraron vulnerabilidades de severidad alta o critica. Reviso el paso Run Snyk to check for vulnerabilities."
+          echo: "### Alerta de seguridad (artelab): Snyk encontro vulnerabilidades altas o criticas" >> $GITHUB_STEP_SUMMARY
 
       - name: Run Snyk monitor to take and send snapshot
         if: ${{ !cancelled() }}
