@@ -226,8 +226,18 @@ commit (SHA) ─► pruebas + análisis ─► imágenes  ghcr.io/<dueño>/devop
 
 ## 13. Uso de Inteligencia Artificial
 
-<!-- Sección para completar por el equipo: indicar qué herramientas de IA se usaron y cómo se aplicaron. -->
+(Escrito por José Ignacio Salas)
+
+Para este repositorio, la Inteligencia Articifial se utilizó como una herramienta de apoyo para la revisión y explicación del contenido ya entregado, facilitación de conocimiento extra, consulta y corrección de errores de código, y para la redacción, estructuración y generación final del archivo README.md. Todas las decisiones de arquitectura, desarrollo de los microservicios, implementación del pipeline de CI/CD y validaciones técnicas fueron realizadas y comprobadas directamente por mi mismo.
 
 ## 14. Conclusiones y reflexiones individuales
 
-<!-- Sección para completar por cada integrante, redactada sin apoyo de IA, con su aprendizaje y contribución al proyecto. -->
+(Escrito por José Ignacio Salas)
+
+Después de haber trabajado en todo este proyecto solo, sea en la configuración de los Dockers, el armado de los workflows de GitHub Actions y conexion con Snyk y SonarCloud que incluyo creación de secrets por parte de GitHub, y solucionando todos los problemas que convenian con todo ese armado, puedo concluir que gracias a estas clases he podido aprender a trabajar con todas estas nuevas herramientas que conectan con conocimiento que ya tenia previamente (Java, Spring Boot y microservicios).
+
+Tuve constantes problemas debido a mi dificultad de entender las cosas al principio, pero con ayuda externa y corrección constante de errores pude salir adelante y terminar la mayoría de cosas que tenía que hacer. Algunos ejemplos como lo de mis problemas con Java en el ci.yml, el cual tuve que mover para que Snyk funcionara, o cuanto atrasé la creación del dependabot.yml debido a que no tenía idea de como crearlo hasta que lo investigué.
+
+Creo que esto será muy importante para el futuro porque me ayudará a crear tecnologías que esten bien separadas con sus funciones, que se ejecuten automaticamente en distintos entornos de forma segura y que se actualicen cada vez que se generen cambios, comprobando que sus funcionalidades siempre esten operando como deben y en caso de que no sea asi, poder identificar sus vulnerabilidades y defectos para poder arreglarlos a la brevedad.
+
+Si tuviera que tomar en cuenta que es lo que debo mejorar después de realizar todo esto, diría que para la próxima ocasión, en véz de simplemente permitir que todo pase para ver que la información llega a SonarCloud y Snyk, debería arreglar los errores que se me indican para que no hayan errores críticos o graves al momento de otra entrega porque seguramente ocurriría en un entorno más serio y que necesite resultados limpios.
