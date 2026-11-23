@@ -1,0 +1,51 @@
+# Entrada a la malla. Como ambos servicios exponen /api/v1/auth/login, se distinguen por prefijo:
+#   /usuarios/...  ->  servicio usuarios  (se reescribe a /...)
+#   /artelab/...   ->  servicio artelab   (se reescribe a /...)
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: artelab-gateway
+  namespace: artelab
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts: ["*"]
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: artelab
+  namespace: artelab
+spec:
+  hosts: ["*"]
+  gateways: ["artelab-gateway"]
+  http:
+    - name: usuarios
+      match:
+        - uri:
+            prefix: /usuarios/
+      rewrite:
+        uri: /
+      timeout: 15s
+      route:
+        - destination:
+            host: usuarios
+            port:
+              number: 8081
+    - name: artelab
+      match:
+        - uri:
+            prefix: /artelab/
+      rewrite:
+        uri: /
+      timeout: 15s
+      route:
+        - destination:
+            host: artelab
+            port:
+              number: 8080

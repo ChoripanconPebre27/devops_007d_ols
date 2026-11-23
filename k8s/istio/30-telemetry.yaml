@@ -1,0 +1,11 @@
+# Access logs de Envoy (una línea por request con código de respuesta y latencia),
+# visibles con "kubectl logs <pod> -c istio-proxy" y en la pestaña Logs de Kiali.
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: access-logs
+  namespace: artelab
+spec:
+  accessLogging:
+    - providers:
+        - name: envoy

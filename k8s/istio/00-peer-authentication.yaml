@@ -1,0 +1,10 @@
+# mTLS estricto: dentro del namespace solo se acepta tráfico cifrado y autenticado por Istio.
+# Un pod sin sidecar (por ejemplo uno de otro namespace sin inyección) no puede conectarse.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: artelab
+spec:
+  mtls:
+    mode: STRICT

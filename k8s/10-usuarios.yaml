@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: usuarios
+  namespace: artelab
+---
+# SQLite vive en un archivo: se guarda en un volumen persistente para sobrevivir reinicios del pod.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: usuarios-data
+  namespace: artelab
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usuarios
+  namespace: artelab
+  labels:
+    app: usuarios
+    version: v1
+spec:
+  replicas: 1                 # SQLite no permite varias réplicas compartiendo el archivo
+  strategy:
+    type: Recreate            # el volumen es ReadWriteOnce: nunca dos pods a la vez
+  selector:
+    matchLabels:
+      app: usuarios
+  template:
+    metadata:
+      labels:
+        app: usuarios               # Kiali y Prometheus agrupan por app/version
+        version: v1
+      annotations:
+        # Istio fusiona las métricas de la app con las del sidecar y las expone en :15020,
+        # por lo que Prometheus las recoge aun con mTLS estricto.
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: usuarios
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001        # permite escribir en el volumen /data
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: usuarios
+          image: artelab-usuarios:local
+          imagePullPolicy: IfNotPresent   # la imagen se construye dentro de minikube
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:sqlite:/data/usuarios.db
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev                # carga los usuarios de prueba (DataLoader)
+            - name: SECURITY_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: usuarios-secrets
+                  key: jwt-secret
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            periodSeconds: 5
+            failureThreshold: 36        # hasta 3 minutos para arrancar (Flyway + JPA)
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: usuarios-data
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: usuarios
+  namespace: artelab
+  labels:
+    app: usuarios
+spec:
+  type: ClusterIP
+  selector:
+    app: usuarios
+  ports:
+    - name: http              # el prefijo "http" le indica a Istio que es tráfico HTTP
+      port: 8081
+      targetPort: http

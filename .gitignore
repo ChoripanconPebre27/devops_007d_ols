@@ -1,2 +1,7 @@
 ArteLab_ET/
 .env
+*.db
+*.db-journal
+target/
+.last-tag
+ci-metrics*.prom

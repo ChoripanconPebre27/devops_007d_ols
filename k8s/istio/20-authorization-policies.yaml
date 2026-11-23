@@ -1,0 +1,68 @@
+# Políticas de autorización (se evalúan sobre la identidad mTLS del que llama).
+# Identidad del gateway de entrada instalado con istioctl:
+#   cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+# Identidad de artelab:
+#   cluster.local/ns/artelab/sa/artelab
+---
+# 1) Los endpoints de Actuator (métricas y salud) NUNCA se alcanzan desde fuera de la malla.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-actuator-desde-gateway
+  namespace: artelab
+spec:
+  action: DENY
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+      to:
+        - operation:
+            paths: ["/actuator/*"]
+---
+# 2) artelab solo recibe tráfico que entra por el gateway.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: artelab-solo-desde-gateway
+  namespace: artelab
+spec:
+  selector:
+    matchLabels:
+      app: artelab
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+---
+# 3) usuarios: el gateway accede a todo salvo /lookup; artelab accede SOLO a GET .../lookup.
+#    (/lookup no exige JWT en la app, por eso se protege aquí con la identidad del servicio).
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: usuarios-gateway-y-lookup-de-artelab
+  namespace: artelab
+spec:
+  selector:
+    matchLabels:
+      app: usuarios
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+      to:
+        - operation:
+            notPaths: ["*/lookup"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/artelab/sa/artelab
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["*/lookup"]

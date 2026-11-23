@@ -21,16 +21,19 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash appuser \
+# UID fijo: Kubernetes necesita un UID numerico para runAsNonRoot y fsGroup
+RUN useradd --uid 10001 --create-home --shell /bin/bash appuser \
     && mkdir -p /data \
     && chown -R appuser:appuser /app /data
 
 COPY --from=build --chown=appuser:appuser /app/target/*.jar app.jar
 
-USER appuser
+USER 10001
 
 EXPOSE 8081
 
 VOLUME ["/data"]
 
+# Limita el heap al 70% de la memoria del contenedor (el limite lo fija Kubernetes)
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70"
 ENTRYPOINT ["java", "-jar", "app.jar"]

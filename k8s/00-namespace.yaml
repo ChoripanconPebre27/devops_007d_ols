@@ -1,0 +1,8 @@
+# Namespace de la aplicación. El label istio-injection=enabled hace que Istio
+# inyecte automáticamente el sidecar (istio-proxy) en cada pod nuevo.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: artelab
+  labels:
+    istio-injection: enabled

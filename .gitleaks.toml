@@ -1,0 +1,7 @@
+# Configuración de gitleaks: reglas por defecto + lista de valores de desarrollo conocidos.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores por defecto de desarrollo/pruebas (documentados; en Kubernetes los secretos se generan en el despliegue)"
+regexes = ['''change-me''']

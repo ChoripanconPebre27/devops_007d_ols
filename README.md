@@ -1,243 +1,207 @@
-# ArteLab SPA — Microservicios con pipeline CI/CD
+# ArteLab SPA — Observabilidad y cumplimiento en un pipeline DevOps (Evaluación Parcial 3)
 
-Proyecto de dos microservicios Spring Boot para una tienda digital de materiales artísticos, con contenedores Docker, pruebas automatizadas, análisis de seguridad y un pipeline de CI/CD en GitHub Actions que construye, publica y despliega las imágenes de forma automática.
+Dos microservicios Spring Boot (`artelab` y `usuarios`) desplegados en **Kubernetes (minikube) con Istio**, con
+monitoreo (Prometheus + Kiali), un dashboard en Grafana, políticas de cumplimiento automatizadas y un pipeline
+de GitHub Actions que **se detiene** ante fallas críticas de seguridad o calidad.
 
-## 1. Descripción
+> **Sin AWS.** Todo corre en un computador con `minikube`, `kubectl` e `istioctl`. En lugar de CloudWatch se usa
+> Prometheus (permitido por la pauta: "Prometheus, AWS CloudWatch o similar").
 
-ArteLab quiere posicionarse como una tienda digital de materiales artísticos accesibles y de calidad. El sistema se divide en dos servicios independientes:
+## 1. Mapa de la evaluación
 
-| Servicio | Carpeta | Puerto | Responsabilidad |
-|---|---|---|---|
-| `artelab` | `artelab/` | 8080 | Catálogo: productos, categorías y promociones |
-| `usuarios` | `usuarios/` | 8081 | Registro, autenticación y consulta de usuarios |
-
-`artelab` consulta a `usuarios` por HTTP en un único flujo: al crear una promoción asociada a un usuario (`POST /api/v1/promociones/usuario/{usuarioId}`), verifica que el usuario exista llamando a `GET /api/v1/usuarios/{id}/lookup`. Si el usuario no existe responde 404; si `usuarios` no responde o falla, responde 503.
-
-```
-   cliente ──► artelab (8080) ──HTTP──► usuarios (8081)
-                  │                          │
-               SQLite                     SQLite
-            (artelab.db)               (usuarios.db)
-```
-
-## 2. Tecnologías
-
-| Área | Tecnología |
-|---|---|
-| Lenguaje y framework | Java 25, Spring Boot 4.0.6 (Web MVC, WebFlux `WebClient`, Data JPA, Security, Validation, HATEOAS, Actuator) |
-| Base de datos | SQLite (un archivo por servicio) con migraciones Flyway |
-| Autenticación | JWT firmado con HMAC-SHA256, contraseñas con BCrypt |
-| Documentación de API | springdoc-openapi (Swagger UI) |
-| Pruebas | JUnit 5, Mockito, MockMvc, JaCoCo |
-| Contenedores | Docker (multi-stage), Docker Compose |
-| CI/CD | GitHub Actions, GitHub Container Registry (`ghcr.io`) |
-| Seguridad y calidad | Snyk, SonarCloud, Dependabot |
-
-## 3. Estructura del repositorio
-
-```
-devops_007d_ols/
-├── .github/
-│   ├── dependabot.yml            # actualización automática de dependencias
-│   └── workflows/ci.yml          # pipeline CI/CD
-├── artelab/                      # microservicio de catálogo
-│   ├── Dockerfile
-│   ├── .dockerignore
-│   ├── pom.xml
-│   └── src/ (main, test)
-├── usuarios/                     # microservicio de usuarios
-│   ├── Dockerfile
-│   ├── .dockerignore
-│   ├── pom.xml
-│   └── src/ (main, test)
-├── docker-compose.yml            # ejecución local (construye desde el código)
-├── docker-compose.deploy.yml     # despliegue del pipeline (usa imágenes publicadas)
-└── README.md
-```
-
-Cada servicio sigue la misma organización interna de paquetes: `controller` (rutas HTTP), `service` (reglas de negocio), `repository` (acceso a datos), `model`/`dto` (datos), `security` y `config` (seguridad y configuración) y `exception` (manejo global de errores).
-
-## 4. Cómo ejecutar el proyecto
-
-### 4.1 Con Docker Compose (recomendado)
-
-Requisitos: Docker y Docker Compose (`docker --version`, `docker compose version`).
-
-```bash
-docker compose up --build
-```
-
-Desde la raíz del repositorio. La primera vez tarda más porque descarga las imágenes base y compila ambos proyectos con Maven.
-
-| Servicio | URL | Swagger UI |
+| Indicador | Qué se pide | Dónde está |
 |---|---|---|
-| artelab | http://localhost:8080 | http://localhost:8080/doc/swagger-ui.html |
-| usuarios | http://localhost:8081 | http://localhost:8081/doc/swagger-ui.html |
+| **IE1** Monitoreo (logs, métricas, errores, disponibilidad) | Prometheus u otra herramienta | §4 · `application.properties`, `k8s/*.yaml`, Prometheus/Kiali (addons de Istio), logs JSON + access logs de Envoy |
+| **IE2** Despliegue orquestado con monitoreo automatizado | Kubernetes | §3 · `k8s/`, `scripts/04-deploy.sh`, job `deploy-k8s` del pipeline |
+| **IE3** Dashboard (despliegue, cobertura, CPU/mem, errores) | Dashboard integrado al CI/CD | §5 · `k8s/monitoring/dashboards/artelab-observabilidad.json`, `scripts/push-ci-metrics.sh` |
+| **IE4** Documentación de la integración y decisiones | Documentar | Este README (§6–§8) |
+| **IE5** Políticas de cumplimiento | SonarQube / branch protection / scripts de auditoría | §7 · `scripts/audit-compliance.sh`, `k8s/istio/20-*.yaml`, Sonar, Snyk, Trivy, gitleaks, `scripts/configure-branch-protection.sh` |
+| **IE6** El pipeline se detiene ante una falla crítica | Demostrarlo | §8 · `scripts/demo-falla-pipeline.sh` |
 
-Comandos útiles:
+## 2. Arquitectura
 
-```bash
-docker compose ps                    # estado y salud de los contenedores
-docker compose logs -f artelab-api   # logs de un servicio
-docker compose down                  # detiene y elimina los contenedores (los datos se conservan)
-docker compose down -v               # además borra los volúmenes (se pierden los datos)
+```
+                      (port-forward 8080)
+ navegador/curl ─► istio-ingressgateway ──/usuarios/*──► usuarios (8081) ◄── lookup (solo identidad de artelab)
+                    (Gateway+VirtualService) ──/artelab/*──► artelab  (8080) ─────────┘
+                          mTLS STRICT + AuthorizationPolicy entre todos los pods (sidecar istio-proxy)
+
+ Prometheus ──scrape──► istio-proxy:15020 (métricas de Envoy + /actuator/prometheus de la app, fusionadas)
+ Prometheus ──scrape──► Pushgateway ◄── scripts/push-ci-metrics.sh (cobertura, pruebas, tiempo de despliegue)
+ Grafana ──► Prometheus      Kiali ──► Prometheus + API de Kubernetes
 ```
 
-En Linux, si Docker responde `permission denied` sobre `/var/run/docker.sock`, agrega tu usuario al grupo `docker` (`sudo usermod -aG docker $USER`) y vuelve a iniciar sesión.
-
-### 4.2 Sin Docker
-
-Requisitos: JDK 25. Levanta primero `usuarios` y después `artelab`, cada uno en su carpeta:
-
-```bash
-cd usuarios && ./mvnw spring-boot:run
-cd artelab  && ./mvnw spring-boot:run
-```
-
-### 4.3 Variables de entorno
-
-Docker Compose define estas variables con un valor por defecto, así que el archivo `.env` es **opcional** (y no se versiona: está en `.gitignore`). Para cambiarlas, crea un `.env` en la raíz:
-
-| Variable | Servicio | Descripción | Valor por defecto |
-|---|---|---|---|
-| `ARTELAB_JWT_SECRET` | artelab | Clave con la que se firman los JWT | secreto de desarrollo |
-| `USUARIOS_JWT_SECRET` | usuarios | Clave con la que se firman los JWT | secreto de desarrollo |
-| `ADMIN_USER` | artelab | Usuario del login de artelab | `admin` |
-| `ADMIN_PASSWORD` | artelab | Clave del login de artelab | `admin123` |
-
-Variables fijas en `docker-compose.yml`: `SPRING_DATASOURCE_URL` (apunta la base SQLite al volumen `/data`), `USUARIOS_SERVICE_BASE_URL` (`http://usuarios-api:8081`, nombre del servicio en la red de Compose) y `SPRING_PROFILES_ACTIVE=dev` en `usuarios` (activa la carga de usuarios de prueba).
-
-Spring Boot convierte cada variable de entorno en la propiedad equivalente (por ejemplo `SPRING_DATASOURCE_URL` en `spring.datasource.url`) y le da prioridad sobre los archivos `application*.properties`.
-
-## 5. API y autenticación
-
-Todas las rutas, salvo las de autenticación, la documentación Swagger y `/actuator/health`, exigen un JWT en la cabecera `Authorization: Bearer <token>`.
-
-| Servicio | Login | Datos de entrada |
+| Servicio | Puerto | Responsabilidad |
 |---|---|---|
-| artelab | `POST /api/v1/auth/login` | `username` y `password` (usuario en memoria definido por configuración) |
-| usuarios | `POST /api/v1/auth/login` | `correo` y `clave` (usuarios guardados en la base de datos) |
+| `artelab` | 8080 | Catálogo: productos, categorías, promociones. Llama a `usuarios` en `POST /api/v1/promociones/usuario/{id}` |
+| `usuarios` | 8081 | Registro, login y consulta de usuarios |
 
-Usuarios de prueba que `usuarios` crea al iniciar con el perfil `dev`: `admin@mail.cl / admin123`, `ana@mail.cl / ana123`, `luis@mail.cl / luis123`.
+Rutas por el gateway (ambos servicios tienen `/api/v1/auth/login`, por eso se separan por prefijo):
+`/artelab/api/v1/...` y `/usuarios/api/v1/...`.
 
-| Recurso | Rutas |
-|---|---|
-| Categorías (artelab) | `GET/POST /api/v1/categorias`, `GET/PUT/DELETE /api/v1/categorias/{id}` |
-| Productos (artelab) | `GET/POST /api/v1/productos`, `GET/PUT/DELETE /api/v1/productos/{id}` |
-| Promociones (artelab) | `GET/POST /api/v1/promociones`, `POST /api/v1/promociones/usuario/{usuarioId}`, `GET/PUT/DELETE /api/v1/promociones/{id}` |
-| Usuarios (usuarios) | `GET/POST /api/v1/usuarios`, `GET/PUT/DELETE /api/v1/usuarios/{id}`, `GET /api/v1/usuarios/{id}/lookup` |
+Tecnologías: Java 25, Spring Boot 4.0.6, SQLite + Flyway, JWT, JaCoCo, Micrometer/Prometheus, Docker, Kubernetes (minikube),
+Istio (sidecars), Kiali, Grafana, GitHub Actions, Snyk, SonarCloud, Trivy, gitleaks, Dependabot.
 
-Los errores se devuelven con un formato único (`GlobalExceptionHandler`): 400 por datos inválidos o reglas de negocio, 401 por credenciales inválidas, 404 si el recurso no existe, 409 por conflictos (por ejemplo, un correo ya registrado) y 503 si falla el servicio remoto.
+## 3. Despliegue en minikube (IE2)
 
-## 6. Pruebas automatizadas
-
-El proyecto tiene **91 pruebas unitarias** (63 en `artelab` y 28 en `usuarios`), con JUnit 5 y Mockito: servicios con dependencias simuladas y controladores con `MockMvc`.
+Requisitos: `docker`, `minikube`, `kubectl`, `istioctl`, `curl`, bash (Linux/macOS/WSL/Git Bash). Recomendado: 4 CPU y 6 GB de RAM para minikube.
+Los comandos equivalentes uno a uno están en [`docs/DESPLIEGUE_MANUAL.md`](docs/DESPLIEGUE_MANUAL.md).
 
 ```bash
-cd artelab  && ./mvnw clean verify
-cd usuarios && ./mvnw clean verify
+scripts/01-cluster.sh          # minikube + Istio (perfil demo) + Prometheus, Grafana y Kiali
+scripts/02-observabilidad.sh   # Pushgateway + importa el dashboard en Grafana
+scripts/04-deploy.sh           # construye imágenes en minikube, despliega y mide el tiempo de despliegue
+scripts/06-port-forward.sh     # (otra terminal) gateway :8080, Kiali :20001, Grafana :3000, Prometheus :9090
+scripts/05-generar-trafico.sh  # genera tráfico (incluye errores intencionales) para ver datos
 ```
 
-`verify` corre las pruebas, genera el reporte de cobertura de JaCoCo (`target/site/jacoco/index.html`) y **falla si la cobertura de líneas es menor a 80%**. La regla excluye las clases de aplicación, `config`, `security`, `dto`, `model`, `assemblers` y `exception`. Los resultados de las pruebas quedan en `target/surefire-reports/`.
+Qué incluye el despliegue (`k8s/`):
 
-## 7. Pipeline CI/CD (`.github/workflows/ci.yml`)
+- Sidecar de Istio inyectado automáticamente (`istio-injection=enabled` en el namespace `artelab`); los pods deben mostrar `READY 2/2`.
+- Anotaciones `prometheus.io/*` en los pods: Istio fusiona las métricas de la app con las del proxy y Prometheus las recoge aun con mTLS estricto.
+- Sondas `startup/readiness/liveness` contra `/actuator/health/*`, límites de CPU/memoria, usuario no root (UID 10001), sistema de archivos de solo lectura.
+- Volumen persistente (PVC) por servicio para SQLite, `replicas: 1` y estrategia `Recreate`.
+- Secretos (`*-secrets`) **generados en el despliegue**; no existen en el repositorio.
 
-### 7.1 Cuándo se ejecuta
+## 4. Monitoreo y observabilidad (IE1)
 
-En cada `push` a `develop` o `main` y en cada Pull Request hacia esas ramas.
+| Necesidad | Fuente | Cómo verlo |
+|---|---|---|
+| **Métricas de uso** (CPU, memoria, JVM) | cAdvisor + Micrometer (`/actuator/prometheus`) | Grafana, panel "Uso de recursos"; `kubectl top pods -n artelab` |
+| **Disponibilidad** | `up` de Prometheus, sondas de Kubernetes, tasa de éxito de Istio | Grafana "Disponibilidad"; Kiali → Overview (salud por app) |
+| **Errores** | `http_server_requests_seconds_count{status=~"5.."}`, `logback_events_total{level="error"}`, `istio_requests_total{response_code=~"[45].."}` | Grafana "Errores registrados"; Kiali → Graph (aristas en rojo) |
+| **Logs** | Logs JSON de la app (formato `logstash`, ver `usuarios/docs/logging-format.md`) y *access logs* de Envoy (`Telemetry`) | `kubectl logs <pod> -c <app>` / `-c istio-proxy`; Kiali → Workloads → Logs |
+| **Tráfico entre servicios** | Telemetría de Istio | Kiali → Graph, namespace `artelab` |
 
-### 7.2 Jobs
+Cambios en la aplicación para esto: dependencia `micrometer-registry-prometheus`, exposición de `health,info,prometheus`,
+sondas de salud, etiqueta `application=<servicio>` y histograma de latencia (ver `application.properties`).
+
+## 5. Dashboard (IE3)
+
+Archivo: `k8s/monitoring/dashboards/artelab-observabilidad.json` (importado por `scripts/02-observabilidad.sh`).
+URL local: `http://localhost:3000/d/artelab-observabilidad`.
+
+| Fila | Paneles | Origen |
+|---|---|---|
+| CI/CD | Cobertura de líneas, tiempo del último despliegue, pruebas ejecutadas, último despliegue, historiales | Pushgateway (`ci_*`) |
+| Disponibilidad | Servicios UP, uptime, tasa de éxito | `up`, `process_uptime_seconds`, Istio |
+| Recursos | CPU y memoria por pod, heap de la JVM | cAdvisor, Micrometer |
+| Errores | 5xx (Spring), logs ERROR, 4xx/5xx en la malla | Micrometer, Istio |
+| Tráfico | RPS y latencia p95 (Spring e Istio) | Micrometer, Istio |
+
+**Integración con el CI/CD.** Las métricas `ci_*` las produce el propio proceso:
+
+- **Local:** `scripts/04-deploy.sh` mide el tiempo de despliegue y llama a `scripts/push-ci-metrics.sh`, que lee la cobertura de
+  `target/site/jacoco/jacoco.csv` (mismas exclusiones que el gate del `pom.xml`) y las pruebas de `surefire-reports`
+  (ejecuta antes `./mvnw clean verify` en cada servicio) y las envía al Pushgateway (`env=minikube`).
+- **GitHub Actions:** cada job de pruebas genera `ci-metrics-<servicio>.prom`; `deploy-k8s` los consolida con el tiempo de despliegue
+  en el artefacto `ci-metrics`. Un runner no puede alcanzar tu minikube, así que se importa a mano:
+  `scripts/push-ci-metrics.sh ci-metrics.prom` (queda como `env=github-actions`).
+
+## 6. Cómo se integran las herramientas en el pipeline (IE4)
 
 ```
 push / PR a develop o main
-   ├── test-usuarios ─┐   (en paralelo)
-   └── test-artelab  ─┤
-                      └── build-docker ──► deploy   (solo en push)
+ ├─ compliance ─ audit-compliance.sh (políticas como código) + gitleaks (secretos)
+ ├─ test-usuarios ─ Snyk(critical) → ./mvnw verify (pruebas + JaCoCo ≥80%) → ci-metrics → SonarCloud (Quality Gate)
+ ├─ test-artelab  ─ (igual)
+ └─ build-docker (needs: los 3 anteriores, solo push) ─ build → Trivy(CRITICAL, bloquea) → push a ghcr.io (tags latest y SHA)
+     └─ deploy-k8s ─ minikube + Istio en el runner → despliega el SHA → verify-policies.sh → ci-metrics.prom
 ```
 
-| Job | Qué hace |
-|---|---|
-| `test-usuarios` y `test-artelab` | Escaneo de dependencias con Snyk, pruebas con cobertura (`./mvnw clean verify`), análisis de SonarCloud y publicación de reportes como artefactos |
-| `build-docker` | Construye las dos imágenes (`linux/amd64` y `linux/arm64`) y las publica en `ghcr.io`. Solo corre si ambos jobs de prueba pasaron |
-| `deploy` | Descarga las imágenes publicadas, las levanta con Docker Compose, espera a que estén saludables, ejecuta una verificación y destruye el entorno |
-
-### 7.3 Secretos del repositorio
-
-| Secreto | Uso |
-|---|---|
-| `SNYK_TOKEN` | Autenticación de Snyk |
-| `SONAR_TOKEN_U` / `SONAR_TOKEN_A` | Autenticación de SonarCloud (proyectos `usuarios` y `artelab`) |
-| `GITHUB_TOKEN` | Lo entrega GitHub automáticamente; se usa para publicar y descargar imágenes de `ghcr.io` |
-
-Los tres primeros se cargan también como secretos de Dependabot, porque los Pull Requests que abre Dependabot no reciben los secretos de Actions.
-
-## 8. Seguridad y calidad del código
-
-| Herramienta | Tipo de análisis | Cómo se usa en el pipeline |
+| Herramienta | Qué pregunta responde | Decisión técnica que habilita |
 |---|---|---|
-| **Snyk** | Dependencias de terceros (SCA) | `snyk test` con umbral de severidad alta, en modo reporte (no detiene el pipeline), y `snyk monitor`, que envía una copia de las dependencias a la cuenta de Snyk para vigilarlas en el tiempo |
-| **SonarCloud** | Código propio (SAST) y cobertura | Se ejecuta en push a `main` y en Pull Requests hacia `main`; recibe el reporte de JaCoCo. Proyectos: `devops-grupo7_sonar-usuarios` y `devops-grupo7_sonar-artelab` |
-| **Dependabot** | Actualización de dependencias | Cada semana revisa las librerías Maven de ambos servicios, las acciones de GitHub y las imágenes base de Docker, y abre Pull Requests hacia `develop` |
+| Prometheus + Micrometer | ¿Está arriba? ¿Cuánto CPU/RAM/heap usa? ¿Cuántos 5xx hay? | Ajustar `requests/limits` y `MaxRAMPercentage`; decidir un rollback si suben los 5xx tras un despliegue |
+| Kiali | ¿Quién llama a quién? ¿Dónde falla la cadena? ¿La config de Istio es válida? | Ubicar el servicio culpable de un error; detectar rutas/políticas mal configuradas antes de que fallen |
+| Grafana (CI/CD) | ¿Empeora el tiempo de despliegue? ¿Baja la cobertura? | Frenar la entrega si la cobertura cae; revisar el tiempo de build/arranque si crece |
+| JaCoCo / SonarCloud | ¿Las pruebas cubren lo suficiente? ¿Hay bugs/vulnerabilidades/deuda? | Aceptar o rechazar un PR por calidad objetiva (Quality Gate) |
+| Snyk / Trivy / gitleaks | ¿Hay dependencias, imágenes o credenciales vulnerables? | Actualizar dependencias (Dependabot), cambiar imagen base, rotar secretos |
+| Istio (mTLS + AuthorizationPolicy) | ¿Solo quien debe puede llamar a quién? | Reducir la superficie de ataque entre servicios |
 
-Otras medidas: los contenedores se ejecutan con un usuario sin privilegios de root (`appuser`), la imagen final solo incluye el JRE, los secretos se guardan en GitHub Secrets y no en el código, y Actuator solo expone `/actuator/health`, sin detalle.
+<!-- COMPLETAR por el equipo: 2 o 3 decisiones técnicas REALES que tomaron mirando estas métricas
+     (ej.: "al ver X en Grafana cambiamos Y"), con captura. Esta sección debe ser redacción propia (ver §10). -->
 
-## 9. Contenedores y orquestación
+## 7. Políticas de cumplimiento (IE5)
 
-**Dockerfile (multi-stage).** La etapa `build` (`maven:3.9-eclipse-temurin-25`) copia primero el `pom.xml` y descarga las dependencias para aprovechar la caché de capas, y luego compila el `.jar` sin ejecutar las pruebas (ya corrieron en el pipeline). La etapa `runtime` (`eclipse-temurin:25-jre`) solo contiene el `.jar`, instala `curl` para el healthcheck y corre como `appuser`.
+| Política | Herramienta | Dónde se aplica |
+|---|---|---|
+| Higiene del repo, contenedores no root, manifiestos con probes/limits/tag fijo, sin Secrets en el repo, mTLS STRICT, Actuator denegado por el gateway, CI sin `continue-on-error` | `scripts/audit-compliance.sh` (script de auditoría) | Job `compliance`, y local |
+| Cobertura de líneas ≥ 80% (excluye config, security, dto, model, assemblers, exception) | JaCoCo (`pom.xml`) | `./mvnw verify` |
+| Calidad y seguridad del código (Quality Gate) | SonarCloud, con `sonar.qualitygate.wait=true` | `main` y PR hacia `main` |
+| Dependencias con vulnerabilidades **críticas** | Snyk (`--severity-threshold=critical`) | Jobs `test-*` |
+| Imágenes con vulnerabilidades **críticas** con corrección | Trivy (`--exit-code 1`) antes de publicar | Job `build-docker` |
+| Secretos en el código | gitleaks (+ `.gitleaks.toml`) | Job `compliance` |
+| Quién puede llamar a quién en tiempo de ejecución | `PeerAuthentication` STRICT + `AuthorizationPolicy` | Cluster; se prueba con `scripts/verify-policies.sh` |
+| Cambios solo por PR con checks y 1 aprobación | Branch protection (`scripts/configure-branch-protection.sh`) | GitHub (`main`) |
+| Actualización de dependencias | Dependabot | Semanal, hacia `develop` |
 
-**Docker Compose.** Define dos servicios (`usuarios-api` y `artelab-api`) con:
+Para correr la auditoría local: `scripts/audit-compliance.sh` (no necesita cluster). Con el cluster arriba y el gateway abierto:
+`scripts/verify-policies.sh` comprueba que Actuator y `/lookup` dan 403 desde el gateway, que un pod sin sidecar no se conecta (mTLS) y que el login legítimo sigue funcionando.
 
-- **Healthcheck** en ambos: `curl -f http://localhost:<puerto>/actuator/health` cada 10 s, con 5 reintentos y 30 s de gracia inicial (`start_period`).
-- **Orden de arranque:** `artelab-api` usa `depends_on` con `condition: service_healthy` sobre `usuarios-api`, de modo que no arranca hasta que `usuarios-api` responde saludable.
-- **Persistencia:** un volumen nombrado por servicio (`artelab-data` y `usuarios-data`) montado en `/data`, donde vive la base SQLite.
-- **Red:** los contenedores se comunican por el nombre del servicio (`http://usuarios-api:8081`).
-- **Reinicio automático:** `restart: unless-stopped`.
+## 8. Demostración: el pipeline se detiene (IE6)
 
-## 10. Despliegue automático (entorno simulado)
+Cada comando crea una rama `demo/falla-*` (nunca toca `main`), la sube, y al abrir el Pull Request el pipeline queda en rojo y los jobs siguientes se omiten:
 
-El job `deploy` simula un entorno cloud con Docker Compose dentro del runner de GitHub Actions. Usa `docker-compose.deploy.yml`, que es el mismo stack que `docker-compose.yml` pero con las imágenes ya publicadas en `ghcr.io` en lugar de `build:`. Los pasos son: descargar las imágenes, `docker compose up -d --wait` (espera los healthchecks), `docker compose ps`, una verificación que consulta `/actuator/health` de ambos servicios y exige `"status":"UP"`, y por último `docker compose down -v`. Si un paso falla, se imprimen los logs. El entorno es efímero: se destruye al terminar.
+| Comando | Falla provocada | Job que debe detenerse |
+|---|---|---|
+| `scripts/demo-falla-pipeline.sh latest` | Manifiesto con imagen `:latest` | `compliance` |
+| `scripts/demo-falla-pipeline.sh secreto` | Credencial en el código | `compliance` (gitleaks) |
+| `scripts/demo-falla-pipeline.sh pruebas` | Prueba unitaria que falla | `test-usuarios` |
 
-## 11. Trazabilidad y calidad
+Evidencia a capturar: pestaña *Actions* con el job rojo y `build-docker`/`deploy-k8s` en *skipped*; el PR con el merge bloqueado
+(si activaste branch protection); y la corrida verde en `main` para contrastar. Se limpia con `scripts/demo-falla-pipeline.sh limpiar` y cerrando el PR.
 
-**Trazabilidad.** Cada imagen se publica con dos etiquetas: `latest` y el SHA del commit que la originó (`${{ github.sha }}`). El job `deploy` despliega exactamente la imagen de ese SHA, no `latest`.
+Falla en **ejecución** (observabilidad): `scripts/simular-falla-usuarios.sh` baja `usuarios` a 0 réplicas; verás 503, logs ERROR y 5xx en Grafana y la arista en rojo en Kiali.
 
+## 9. Ejecución y pruebas de las aplicaciones
+
+```bash
+cd usuarios && ./mvnw clean verify     # pruebas + cobertura (falla bajo 80%) -> target/site/jacoco/index.html
+cd artelab  && ./mvnw clean verify
+docker compose up --build              # alternativa sin Kubernetes (usa docker-compose.yml)
 ```
-commit (SHA) ─► pruebas + análisis ─► imágenes  ghcr.io/<dueño>/devops_007d_ols/<servicio>:<SHA>
-                                              └─► despliegue de ese mismo <SHA>
-```
 
-| Qué se quiere saber | Dónde verlo |
+Usuarios de prueba (perfil `dev` de `usuarios`): `admin@mail.cl / admin123`, `ana@mail.cl / ana123`, `luis@mail.cl / luis123`.
+Documentación de la API: Swagger UI en `/doc/swagger-ui.html` de cada servicio (con `kubectl port-forward -n artelab svc/<servicio> <puerto>:<puerto>`).
+
+Secretos del pipeline (GitHub → Settings → Secrets): `SNYK_TOKEN`, `SONAR_TOKEN_U`, `SONAR_TOKEN_A`; `GITHUB_TOKEN` lo entrega GitHub.
+Si el repositorio pertenece a una **organización**, `gitleaks-action` puede exigir el secreto `GITLEAKS_LICENSE`.
+
+## 10. Uso de Inteligencia Artificial
+
+<!-- COMPLETAR por el equipo (la pauta exige declararlo en el informe y citarlo en https://bibliotecas.duoc.cl/ia).
+     Texto base, ajústenlo a lo que realmente hicieron y validaron:
+     "Se usó Claude (Anthropic) como apoyo para: adaptar la estructura del repositorio al nuevo encargo (manifiestos
+     de Kubernetes/Istio, scripts, dashboard y workflow), y para redactar documentación técnica descriptiva.
+     Todo el contenido fue revisado, ejecutado y validado por el equipo en su propio entorno." -->
+
+## 11. Limitaciones conocidas
+
+- SQLite en archivo: un solo pod por servicio; el despliegue usa `Recreate`, por lo que hay una breve interrupción al actualizar.
+- Pushgateway sin persistencia: si su pod se reinicia, los paneles CI/CD quedan vacíos hasta el próximo despliegue o `push-ci-metrics.sh`.
+- Kiali no muestra trazas distribuidas (no se instala Jaeger); la trazabilidad se apoya en logs, access logs y métricas.
+- `/api/v1/usuarios/{id}/lookup` no exige JWT en la app (artelab no envía uno); el acceso lo restringe la `AuthorizationPolicy` a la identidad de artelab. Fuera de Istio (por ejemplo `docker compose`) ese endpoint queda abierto.
+- Valores por defecto de desarrollo en `application*.properties` y `docker-compose.yml`; en Kubernetes los secretos se generan al desplegar.
+
+## 12. Solución de problemas
+
+| Síntoma | Qué revisar |
 |---|---|
-| De qué commit salió una imagen | La etiqueta de la imagen en la sección Packages del repositorio |
-| Qué pruebas se ejecutaron y su resultado | Artefactos `usuarios-test-results` y `artelab-test-results` de cada ejecución |
-| Qué cobertura tuvo el código | Artefactos `usuarios-jacoco-report` y `artelab-jacoco-report`, y el panel de SonarCloud |
-| Qué dependencias se analizaron | Log del paso de Snyk y el proyecto en la cuenta de Snyk |
-| Qué se desplegó y si quedó saludable | Job `deploy` de la ejecución |
+| Pods `READY 1/2` o sin sidecar | `kubectl get ns artelab --show-labels` (debe tener `istio-injection=enabled`); recrear los pods |
+| Pod en `CrashLoopBackOff` por escritura | `kubectl -n artelab logs <pod> -c <app>`; el contenedor tiene raíz de solo lectura (solo `/data` y `/tmp` son escribibles) |
+| Grafana/Kiali sin datos | Generar tráfico (`05-generar-trafico.sh`); revisar el rango de tiempo; `istioctl dashboard prometheus` → Status → Targets |
+| Panel CI/CD vacío | Ejecutar `./mvnw clean verify` en ambos servicios y luego `scripts/push-ci-metrics.sh` |
+| `minikube image build` falla | `minikube status`; probar `eval $(minikube docker-env)` y `docker build -t artelab-usuarios:v1 ./usuarios` |
+| `istioctl analyze -n artelab` con avisos | Leer el mensaje: normalmente es un host/puerto mal escrito en `VirtualService` o `AuthorizationPolicy` |
 
-**Calidad.** Se garantiza con tres controles: las pruebas deben pasar y la cobertura de líneas debe ser de al menos 80% (el job falla si no), las imágenes solo se construyen y despliegan si ambos jobs de prueba pasaron, y el despliegue solo termina bien si ambos servicios quedan saludables.
+## 13. Conclusiones y reflexiones individuales
 
-## 12. Limitaciones conocidas
+<!-- La pauta prohíbe usar IA para esta sección. Cada integrante escribe la suya, sin apoyo de IA. -->
 
-- Cada servicio usa SQLite en un archivo local, por lo que no se puede escalar horizontalmente (varias réplicas no comparten la base).
-- Snyk funciona en modo reporte: las vulnerabilidades encontradas se informan pero no detienen el pipeline.
-- SonarCloud solo analiza la rama principal y los Pull Requests hacia ella, y no espera el resultado del Quality Gate.
-- El despliegue es una simulación efímera en el runner, no una aplicación corriendo de forma permanente en un servidor.
-- Los valores por defecto de contraseñas y secretos del compose son de desarrollo y deben reemplazarse en un entorno real.
+### Integrante 1: (nombre)
 
-## 13. Uso de Inteligencia Artificial
+(Escribir aquí tu aprendizaje y tu contribución al proyecto.)
 
-(Escrito por José Ignacio Salas)
+### Integrante 2: (nombre)
 
-Para este repositorio, la Inteligencia Articifial se utilizó como una herramienta de apoyo para la revisión y explicación del contenido ya entregado, facilitación de conocimiento extra, consulta y corrección de errores de código, y para la redacción, estructuración y generación final del archivo README.md. Todas las decisiones de arquitectura, desarrollo de los microservicios, implementación del pipeline de CI/CD y validaciones técnicas fueron realizadas y comprobadas directamente por mi mismo.
-
-## 14. Conclusiones y reflexiones individuales
-
-(Escrito por José Ignacio Salas)
-
-Después de haber trabajado en todo este proyecto solo, sea en la configuración de los Dockers, el armado de los workflows de GitHub Actions y conexion con Snyk y SonarCloud que incluyo creación de secrets por parte de GitHub, y solucionando todos los problemas que convenian con todo ese armado, puedo concluir que gracias a estas clases he podido aprender a trabajar con todas estas nuevas herramientas que conectan con conocimiento que ya tenia previamente (Java, Spring Boot y microservicios).
-
-Tuve constantes problemas debido a mi dificultad de entender las cosas al principio, pero con ayuda externa y corrección constante de errores pude salir adelante y terminar la mayoría de cosas que tenía que hacer. Algunos ejemplos como lo de mis problemas con Java en el ci.yml, el cual tuve que mover para que Snyk funcionara, o cuanto atrasé la creación del dependabot.yml debido a que no tenía idea de como crearlo hasta que lo investigué.
-
-Creo que esto será muy importante para el futuro porque me ayudará a crear tecnologías que esten bien separadas con sus funciones, que se ejecuten automaticamente en distintos entornos de forma segura y que se actualicen cada vez que se generen cambios, comprobando que sus funcionalidades siempre esten operando como deben y en caso de que no sea asi, poder identificar sus vulnerabilidades y defectos para poder arreglarlos a la brevedad.
-
-Si tuviera que tomar en cuenta que es lo que debo mejorar después de realizar todo esto, diría que para la próxima ocasión, en véz de simplemente permitir que todo pase para ver que la información llega a SonarCloud y Snyk, debería arreglar los errores que se me indican para que no hayan errores críticos o graves al momento de otra entrega porque seguramente ocurriría en un entorno más serio y que necesite resultados limpios.
+(Escribir aquí tu aprendizaje y tu contribución al proyecto.)
