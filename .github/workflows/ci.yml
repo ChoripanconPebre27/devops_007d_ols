@@ -101,21 +101,21 @@ jobs:
 
       - name: Publicar resultados de las pruebas
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: usuarios-test-results
           path: usuarios/target/surefire-reports/
 
       - name: Publicar reporte de cobertura JaCoCo
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: usuarios-jacoco-report
           path: usuarios/target/site/jacoco/
 
       - name: Publicar metricas del CI
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ci-metrics-usuarios
           path: ci-metrics-usuarios.prom
@@ -183,21 +183,21 @@ jobs:
 
       - name: Publicar resultados de las pruebas
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artelab-test-results
           path: artelab/target/surefire-reports/
 
       - name: Publicar reporte de cobertura JaCoCo
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: artelab-jacoco-report
           path: artelab/target/site/jacoco/
 
       - name: Publicar metricas del CI
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ci-metrics-artelab
           path: ci-metrics-artelab.prom
@@ -357,7 +357,7 @@ jobs:
 
       - name: Publicar metricas consolidadas (se importan al dashboard con scripts/push-ci-metrics.sh)
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ci-metrics
           path: ci-metrics.prom
