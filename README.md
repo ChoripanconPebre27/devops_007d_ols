@@ -18,6 +18,8 @@ de GitHub Actions que **se detiene** ante fallas críticas de seguridad o calida
 | **IE5** Políticas de cumplimiento | SonarQube / branch protection / scripts de auditoría | §7 · `scripts/audit-compliance.sh`, `k8s/istio/20-*.yaml`, Sonar, Snyk, Trivy, gitleaks, `scripts/configure-branch-protection.sh` |
 | **IE6** El pipeline se detiene ante una falla crítica | Demostrarlo | §8 · `scripts/demo-falla-pipeline.sh` |
 
+> Capturas y explicación de cada indicador: [`docs/EVIDENCIAS.md`](docs/EVIDENCIAS.md).
+
 ## 2. Arquitectura
 
 ```
@@ -39,7 +41,7 @@ de GitHub Actions que **se detiene** ante fallas críticas de seguridad o calida
 Rutas por el gateway (ambos servicios tienen `/api/v1/auth/login`, por eso se separan por prefijo):
 `/artelab/api/v1/...` y `/usuarios/api/v1/...`.
 
-Tecnologías: Java 25, Spring Boot 4.0.6, SQLite + Flyway, JWT, JaCoCo, Micrometer/Prometheus, Docker, Kubernetes (minikube),
+Tecnologías: Java 25, Spring Boot 4.0.10, SQLite + Flyway, JWT, JaCoCo, Micrometer/Prometheus, Docker, Kubernetes (minikube),
 Istio (sidecars), Kiali, Grafana, GitHub Actions, Snyk, SonarCloud, Trivy, gitleaks, Dependabot.
 
 ## 3. Despliegue en minikube (IE2)
@@ -118,8 +120,7 @@ push / PR a develop o main
 | Snyk / Trivy / gitleaks | ¿Hay dependencias, imágenes o credenciales vulnerables? | Actualizar dependencias (Dependabot), cambiar imagen base, rotar secretos |
 | Istio (mTLS + AuthorizationPolicy) | ¿Solo quien debe puede llamar a quién? | Reducir la superficie de ataque entre servicios |
 
-<!-- COMPLETAR por el equipo: 2 o 3 decisiones técnicas REALES que tomaron mirando estas métricas
-     (ej.: "al ver X en Grafana cambiamos Y"), con captura. Esta sección debe ser redacción propia (ver §10). -->
+Al revisar las métricas del dashboard sobre los datos de testeo, se llevó a la conclusión que no era necesario hacer cambios debido a que la cobertura supera en ambos casos el 80% (96,8 y 100%) y los servicios se mantuvieron en UP, por lo tanto no se necesitó de ajustes.
 
 ## 7. Políticas de cumplimiento (IE5)
 
@@ -169,11 +170,9 @@ Si el repositorio pertenece a una **organización**, `gitleaks-action` puede exi
 
 ## 10. Uso de Inteligencia Artificial
 
-<!-- COMPLETAR por el equipo (la pauta exige declararlo en el informe y citarlo en https://bibliotecas.duoc.cl/ia).
-     Texto base, ajústenlo a lo que realmente hicieron y validaron:
-     "Se usó Claude (Anthropic) como apoyo para: adaptar la estructura del repositorio al nuevo encargo (manifiestos
-     de Kubernetes/Istio, scripts, dashboard y workflow), y para redactar documentación técnica descriptiva.
-     Todo el contenido fue revisado, ejecutado y validado por el equipo en su propio entorno." -->
+(Escrito por José Ignacio Salas)
+
+Para este repositorio, la Inteligencia Artificial se utilizó como una herramienta de apoyo para la revisión y explicación del contenido ya entregado, facilitación de conocimiento extra y recomendaciones, consulta y corrección de errores de código, y para la redacción, estructuración y generación final del archivo README.md. Todas las decisiones de arquitectura, despliegue de Kubernetes e Istio, monitoreo y observabilidad, dashboard y todos los scripts fueron realizadas y comprobadas directamente por mi mismo.
 
 ## 11. Limitaciones conocidas
 
@@ -196,12 +195,14 @@ Si el repositorio pertenece a una **organización**, `gitleaks-action` puede exi
 
 ## 13. Conclusiones y reflexiones individuales
 
-<!-- La pauta prohíbe usar IA para esta sección. Cada integrante escribe la suya, sin apoyo de IA. -->
+(Escrito por José Ignacio Salas)
 
-### Integrante 1: (nombre)
+Luego de haber comprobado cada detalle en este nuevo avance del proyecto para la tercera evaluación, tanto en el despliegue de Kubernetes e Istio y sus configuraciones, como el monitoreo y observabilidad a través de Prometheus, Grafana y Kiali, que presentan múltiples formas de mostrar datos del proyecto, además de todos los scripts que ayudan en este proceso, puedo concluir que he podido desarrollarme de una manera más completa en el entendimiento de todos estos contenidos presentados en clases y que fueron aplicados debida y cuidadosamente para complementar los productos que ya estaban presentes en las evaluaciones anteriores.
 
-(Escribir aquí tu aprendizaje y tu contribución al proyecto.)
+En comparación con la evaluación anterior, los problemas no fueron varios. Lo que más pudo complicar el desarrollo en relación con el tiempo, fue mi dificultad para organizarme en cuanto al contenido. Una vez pude comprometerme con el aprendizaje, logré entenderlo y seguir adelante con el proyecto. Una vez atravesada esta barrera la construcción de todo fue un poco más simple de lo que creía, y llegué a disfrutar del proceso.
 
-### Integrante 2: (nombre)
+Aún así aparecieron más problemas en el camino. Por ejemplo, tuve que observar cuales eran los problemas al comprobar que, al seguir los pasos para armar todo localmente, a veces tenía problemas para generar el tráfico. También ocurrió que, incluso después de haber resuelto todos mis problemas locales y solucionado los inconvenientes para que todo el monitoreo funcionara, seguía encontrando más trabas con los Actions de GitHub (quitar bases de datos, actualizar la versión de Spring Boot o también actualizar la versión de Maven).
 
-(Escribir aquí tu aprendizaje y tu contribución al proyecto.)
+Siento que estas nuevas experiencias serán muy importantes para mi futuro porque, con ellas, podré desarrollar aplicaciones sin tener miedo a preguntarme si algo fallará. Con estos sistemas, puedo identificar errores, monitorear la disponibilidad, revisar métricas y observar la comunicación entre microservicios. Gracias a todo lo anterior, puedo tener la seguridad de que la automatización me permitirá identificar problemas de manera anticipada, para que puedan resolverse a la brevedad y así generar mayor seguridad para todos los usuarios que utilicen mi servicio.
+
+Si hay algo que siento que podría mejorar, sería hacer que la simulación de fallas no sea manual, sino que también se ejecute de manera automática.
