@@ -53,7 +53,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: usuarios
-          image: artelab-usuarios:local
+          image: artelab-usuarios:latest
           imagePullPolicy: IfNotPresent   # la imagen se construye dentro de minikube
           ports:
             - name: http
